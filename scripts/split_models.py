@@ -14,7 +14,6 @@ SYSTEM1_PREFIXES = (
     "model.traj_dit.",
     "model.action_encoder.",
     "model.action_decoder.",
-    "model.cond_projector.",
     "model.pos_encoding.",
     "model.rgb_model.",
     "model.memory_encoder.",
