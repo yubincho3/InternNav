@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -54,6 +55,24 @@ def main():
 
     save_file({k: v.cpu() for k, v in system1_sd.items()}, os.path.join(s1_dir, "model.safetensors"))
     save_file({k: v.cpu() for k, v in system2_sd.items()}, os.path.join(s2_dir, "model.safetensors"))
+    
+    # Copy metadata files (config.json, etc.) from original model to system2
+    for file in os.listdir(args.model_path):
+        if file.endswith(".json") or "tokenizer" in file or "merges.txt" in file:
+            src_path = os.path.join(args.model_path, file)
+            dst_path = os.path.join(s2_dir, file)
+            
+            if file == "config.json":
+                with open(src_path, "r") as f:
+                    config_data = json.load(f)
+                config_data["model_type"] = "qwen2_5_vl"
+                config_data["architectures"] = ["Qwen2_5_VLForConditionalGeneration"]
+                with open(dst_path, "w") as f:
+                    json.dump(config_data, f, indent=2)
+            else:
+                shutil.copy(src_path, dst_path)
+    
+    print(f"Done! Checkpoints saved to {args.output_dir}")
 
     # Copy config/tokenizer/processor files for System2
     S2_FILES = [
