@@ -118,7 +118,5 @@ class InternVLAN1System2(Qwen2_5_VLForConditionalGeneration):
         config_path = os.path.join(model_path, 'config.json')
         with open(config_path, 'r') as f:
             config_dict = json.load(f)
-        config_dict['model_type'] = 'qwen2_5_vl'
         config = Qwen2_5_VLConfig.from_dict(config_dict)
-        config.do_sample = True  # Enable sampling to align with temperature settings
         return cls.from_pretrained(model_path, config=config, **kwargs)

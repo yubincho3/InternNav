@@ -80,7 +80,6 @@ def split_model(args):
         # Copy config/tokenizer/processor files for System2
         print('Copying tokenizer and config files to System 2 directory...')
         S2_FILES = [
-            'config.json',
             'generation_config.json',
             'preprocessor_config.json',
             'tokenizer_config.json',
