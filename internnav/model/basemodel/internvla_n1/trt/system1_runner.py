@@ -11,7 +11,7 @@ class TRTSystem1Runner:
     back to the input dtype.
     """
 
-    def __init__(self, engine_path, logger_level=trt.Logger.INFO):
+    def __init__(self, engine_path, logger_level=trt.Logger.WARNING):
         self.logger = trt.Logger(logger_level)
         self.runtime = trt.Runtime(self.logger)
         with open(engine_path, 'rb') as f:
