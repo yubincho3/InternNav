@@ -24,7 +24,7 @@ class InternVLAN1System2(Qwen2_5_VLForConditionalGeneration):
         self.model.latent_queries = nn.Parameter(
             torch.randn(1, self.n_query, config.hidden_size)
         )
-        self._last_projected_latents = None
+        self._vision_cache = None
 
     @property
     def device(self) -> torch.device:
@@ -46,8 +46,17 @@ class InternVLAN1System2(Qwen2_5_VLForConditionalGeneration):
 
             # ViT image embedding (masked_scatter: graph-break-free)
             if pixel_values is not None:
-                pixel_values = pixel_values.type(self.visual.dtype)
-                image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                if self._vision_cache is not None and self._vision_cache['key'] is pixel_values:
+                    image_embeds = self._vision_cache['image_embeds']
+                else:
+                    original = pixel_values
+                    pixel_values = pixel_values.type(self.visual.dtype)
+                    image_embeds = self.visual(pixel_values, grid_thw=image_grid_thw)
+                    self._vision_cache = {
+                        'key': original,
+                        'image_embeds': image_embeds
+                    }
+
                 mask = (input_ids == self.config.image_token_id)
                 mask_expanded = mask.unsqueeze(-1).expand_as(inputs_embeds)
                 image_embeds = image_embeds.to(inputs_embeds.device, inputs_embeds.dtype)
@@ -87,31 +96,23 @@ class InternVLAN1System2(Qwen2_5_VLForConditionalGeneration):
             'pixel_values': None,
             'image_grid_thw': image_grid_thw,
             'attention_mask': attention_mask,
-            'output_hidden_states': True,
             'return_dict': True
         })
 
-        outputs = super().forward(**kwargs)
-        
-        # Extract and project hidden states for System 1
-        # Do not extract during decode steps (seq_len=1) — preserves the latents from the prefill phase.
-        if hasattr(outputs, 'hidden_states') and outputs.hidden_states is not None:
-            last_hidden = outputs.hidden_states[-1]
-            if last_hidden.shape[1] >= self.n_query:
-                self._last_projected_latents = self.model.cond_projector(last_hidden[:, -self.n_query:, :]).detach()
-
-        return outputs
-
-    def get_last_latents(self):
-        return self._last_projected_latents
+        return super().forward(**kwargs)
 
     def generate_latents(self, input_ids, pixel_values, image_grid_thw):
         traj_tokens = torch.full((input_ids.shape[0], self.n_query), TRAJ_TOKEN_INDEX,
                                  dtype=input_ids.dtype, device=input_ids.device)
         input_ids = torch.cat([input_ids, traj_tokens], dim=1)
-        self.forward(input_ids=input_ids, pixel_values=pixel_values, image_grid_thw=image_grid_thw)
-
-        return self.get_last_latents()
+        outputs = self.forward(
+            input_ids=input_ids,
+            pixel_values=pixel_values,
+            image_grid_thw=image_grid_thw,
+            output_hidden_states=True
+        )
+        last_hidden = outputs.hidden_states[-1]
+        return self.model.cond_projector(last_hidden[:, -self.n_query:, :]).detach()
 
     @classmethod
     def from_pretrained_system2(cls, model_path, **kwargs):
